@@ -67,3 +67,113 @@ const orderSchema = mongoose.Schema({
 
 export default mongoose.model('Order', orderSchema);
 EOF
+# models/MenuItem.js
+cat > backend/models/MenuItem.js <<'EOF'
+import mongoose from 'mongoose';
+
+const menuItemSchema = mongoose.Schema({
+  name: { type: String, required: true },
+  description: String,
+  price: { type: Number, required: true },
+  imageUrl: String,
+  category: String,
+  available: { type: Boolean, default: true }
+});
+
+export default mongoose.model('MenuItem', menuItemSchema);
+EOF
+
+# models/Order.js
+cat > backend/models/Order.js <<'EOF'
+import mongoose from 'mongoose';
+
+const orderSchema = mongoose.Schema({
+  items: [{ name: String, price: Number, qty: Number }],
+  total: Number,
+  paymentMethod: String,
+  status: { type: String, default: 'pending' }
+});
+
+export default mongoose.model('Order', orderSchema);
+EOF
+
+# controllers/menuController.js
+cat > backend/controllers/menuController.js <<'EOF'
+import MenuItem from '../models/MenuItem.js';
+
+export const getMenu = async (req,res)=>{
+  const items = await MenuItem.find();
+  res.json(items);
+};
+export const addMenuItem = async (req,res)=>{
+  const item = new MenuItem(req.body);
+  await item.save();
+  res.status(201).json(item);
+};
+export const toggleAvailability = async (req,res)=>{
+  const item = await MenuItem.findById(req.params.id);
+  item.available = !item.available;
+  await item.save();
+  res.json(item);
+};
+EOF
+# frontend/src/App.jsx
+cat > frontend/src/App.jsx <<'EOF'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Menu from './pages/Menu';
+import Cart from './pages/Cart';
+import Admin from './pages/Admin';
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/menu" element={<Menu />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/admin" element={<Admin />} />
+      </Routes>
+    </Router>
+  );
+}
+EOF
+
+# Dockerfile
+cat > Dockerfile <<'EOF'
+FROM node:18 as build-frontend
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ .
+RUN npm run build
+
+FROM node:18
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm install
+COPY backend/ .
+COPY --from=build-frontend /frontend/dist ./public
+ENV NODE_ENV=production
+CMD ["node", "server.js"]
+EOF
+
+# docker-compose.yml
+cat > docker-compose.yml <<'EOF'
+version: "3.9"
+services:
+  mongo:
+    image: mongo:5
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  app:
+    build: .
+    ports:
+      - "80:5000"
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/replica
+volumes:
+  mongo_data:
+EOF
